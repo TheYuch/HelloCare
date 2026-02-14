@@ -87,7 +87,7 @@ function LanguageModal({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            transition={{ duration: 0.35, ease: "circOut" }}
           >
             {/* Handle + Header — ONLY drag zone */}
             <div
