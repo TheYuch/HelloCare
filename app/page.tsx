@@ -1,9 +1,16 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+        <Link
+          href="/sign-in"
+          className="absolute right-4 top-4 rounded-lg px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          Sign in
+        </Link>
         <Image
           className="dark:invert"
           src="/next.svg"
