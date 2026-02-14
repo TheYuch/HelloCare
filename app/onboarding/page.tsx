@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useUserMetadata } from "@/lib/firestore";
 import { OnboardingFormData } from "./types";
 import { StepWrapper } from "./components/StepWrapper";
 import { Step0 } from "./components/Step0";
@@ -11,6 +12,15 @@ import { Step3 } from "./components/Step3";
 import { Step4 } from "./components/Step4";
 
 export default function Onboarding() {
+  const { loading, isOnboarded } = useUserMetadata();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && isOnboarded) {
+      router.replace("/");
+    }
+  }, [loading, isOnboarded, router]);
+
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<OnboardingFormData>({
     firstName: "",
@@ -18,8 +28,6 @@ export default function Onboarding() {
     language: "US English",
     phone: "",
   });
-
-  const router = useRouter();
 
   const handleFinishOnboarding = () => {
     router.push("/auth")
@@ -29,6 +37,8 @@ export default function Onboarding() {
   const handleGoBack = () => setStep((s) => Math.max(0, s - 1));
 
   const stepProps = { formData, setFormData };
+
+  if (loading || isOnboarded) return null;
 
   return <StepWrapper canGoBack={canGoBack} onGoBack={handleGoBack}>
     {step === 0 && <Step0 onContinue={() => setStep(1)} {...stepProps} />}

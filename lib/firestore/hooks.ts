@@ -74,6 +74,9 @@ export function useUserMetadata() {
     [uid]
   );
 
+  /** True once we've confirmed a user document exists for this uid. */
+  const isOnboarded = !!uid && !state.loading && state.data != null;
+
   return {
     data: state.data,
     loading: state.loading,
@@ -81,6 +84,7 @@ export function useUserMetadata() {
     refetch,
     saveProfile,
     isAuthenticated: !!uid,
+    isOnboarded,
   };
 }
 

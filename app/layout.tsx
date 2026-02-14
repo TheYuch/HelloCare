@@ -1,4 +1,5 @@
 import { AuthProvider } from "@/lib/auth-context";
+import { RouteGuard } from "./components/RouteGuard";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Manrope } from "next/font/google";
 import "./globals.css";
@@ -33,7 +34,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} antialiased tracking-tight font-semibold font-sans`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <RouteGuard>{children}</RouteGuard>
+        </AuthProvider>
       </body>
     </html>
   );
