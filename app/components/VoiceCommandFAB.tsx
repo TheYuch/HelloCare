@@ -19,6 +19,31 @@ type FabState = "idle" | "recording" | "processing" | "response";
 const RESPONSE_DISMISS_MS = 5000;
 const MAX_USER_TEXT_LENGTH = 60;
 
+function buildDisplayTranscript(
+  segments: Array<{ text: string }>,
+  interim: string,
+): string {
+  const finals = segments.map((s) => s.text.trim()).filter(Boolean);
+  const joinedFinals = finals.join(" ").trim();
+  const interimTrimmed = interim.trim();
+  if (!interimTrimmed) return joinedFinals;
+  if (!joinedFinals) return interimTrimmed;
+
+  const lowerFinals = joinedFinals.toLowerCase();
+  const lowerInterim = interimTrimmed.toLowerCase();
+  if (lowerFinals.endsWith(lowerInterim)) return joinedFinals;
+
+  const lastFinal = finals[finals.length - 1] ?? "";
+  const lowerLastFinal = lastFinal.toLowerCase();
+  if (lowerInterim === lowerLastFinal) return joinedFinals;
+  if (lowerInterim.startsWith(lowerLastFinal) && lowerLastFinal.length > 0) {
+    const suffix = interimTrimmed.slice(lastFinal.length).trimStart();
+    return suffix ? `${joinedFinals} ${suffix}` : joinedFinals;
+  }
+
+  return `${joinedFinals} ${interimTrimmed}`;
+}
+
 export function VoiceCommandFAB() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -44,6 +69,10 @@ export function VoiceCommandFAB() {
     isRecording,
     isStarting,
     isStopping,
+    segments,
+    interimTranscript,
+    error: transcriptionError,
+    tokenError,
     clearError,
     clearTranscript,
     isSupported,
@@ -103,13 +132,26 @@ export function VoiceCommandFAB() {
   );
 
   const canRecord = isSupported && tokenStatus === "ready";
+  const liveTranscript = useMemo(
+    () => buildDisplayTranscript(segments, interimTranscript),
+    [segments, interimTranscript],
+  );
+
+  const scheduleDismiss = useCallback(() => {
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    dismissTimerRef.current = setTimeout(() => {
+      setFabState("idle");
+      setUserTranscript("");
+      setResponseText("");
+    }, RESPONSE_DISMISS_MS);
+  }, []);
 
   const handleFabClick = useCallback(async () => {
     // Read latest state from ref to avoid stale closures.
     const state = fabStateRef.current;
 
-    // Block clicks while the mic is connecting or tearing down.
-    if (isStarting || isStopping) return;
+    // Ignore repeated clicks only while stop cleanup is in progress.
+    if (isStopping) return;
 
     // Dismiss bubbles on tap
     if (state === "response") {
@@ -125,11 +167,14 @@ export function VoiceCommandFAB() {
     if (state === "recording" || isRecording) {
       // Stop recording and process
       setFabState("processing");
-      const transcript = (await stopRecording()).trim();
+      const snapshot = liveTranscript.trim();
+      const transcript = ((await stopRecording()).trim() || snapshot).trim();
 
       if (!transcript) {
-        setFabState("idle");
         setUserTranscript("");
+        setResponseText("I didn't catch that. Please try again.");
+        setFabState("response");
+        scheduleDismiss();
         return;
       }
 
@@ -161,24 +206,12 @@ export function VoiceCommandFAB() {
         const text = data.text || (data.toolCalls.length > 0 ? "Done." : "I didn't catch that.");
         setResponseText(text);
         setFabState("response");
-
-        // Auto-dismiss after timeout
-        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-        dismissTimerRef.current = setTimeout(() => {
-          setFabState("idle");
-          setUserTranscript("");
-          setResponseText("");
-        }, RESPONSE_DISMISS_MS);
+        scheduleDismiss();
       } catch (err) {
         console.error("Voice command error:", err);
         setResponseText("Something went wrong. Please try again.");
         setFabState("response");
-        if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
-        dismissTimerRef.current = setTimeout(() => {
-          setFabState("idle");
-          setUserTranscript("");
-          setResponseText("");
-        }, RESPONSE_DISMISS_MS);
+        scheduleDismiss();
       }
       return;
     }
@@ -187,9 +220,11 @@ export function VoiceCommandFAB() {
     clearError();
     clearTranscript();
     setAudioLevel(0);
+    setUserTranscript("");
+    setResponseText("");
     setFabState("recording");
     await startRecording();
-  }, [isStarting, isStopping, isRecording, stopRecording, voiceContext, executeToolCall, clearError, clearTranscript, startRecording]);
+  }, [isStopping, isRecording, stopRecording, liveTranscript, voiceContext, executeToolCall, clearError, clearTranscript, startRecording, scheduleDismiss]);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -198,16 +233,33 @@ export function VoiceCommandFAB() {
     };
   }, []);
 
+  useEffect(() => {
+    if (fabState !== "recording") return;
+    const text = liveTranscript.trim();
+    if (text) setUserTranscript(text);
+  }, [fabState, liveTranscript]);
+
+  useEffect(() => {
+    if (!transcriptionError && !tokenError) return;
+    const details = tokenError?.message ?? transcriptionError?.message;
+    if (!details) return;
+    if (fabState === "recording" || fabState === "processing") {
+      setResponseText("Transcription failed. Please try again.");
+      setFabState("response");
+      scheduleDismiss();
+    }
+  }, [fabState, transcriptionError, tokenError, scheduleDismiss]);
+
   // Don't render on home page (ChatWidget already has its own mic) or if not logged in
   if (pathname === "/" || !user) return null;
 
-  const isActive = fabState === "recording" || isStarting || isStopping;
+  const isActive = fabState === "recording" || isStarting;
 
   return (
     <div className="fixed bottom-6 left-4 z-40 flex flex-col items-start gap-2">
       {/* Transcript + response bubbles */}
       <AnimatePresence>
-        {(fabState === "processing" || fabState === "response") && userTranscript && (
+        {(fabState === "recording" || fabState === "processing" || fabState === "response") && userTranscript && (
           <motion.div
             key="bubbles"
             initial={{ opacity: 0, y: 8, scale: 0.95 }}

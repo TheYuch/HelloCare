@@ -17,6 +17,17 @@ import {
 } from "@/lib/firestore";
 import {
   PAGE_ROUTES,
+  navigateSchema,
+  updateActionItemSchema,
+  deleteActionItemSchema,
+  deleteHealthNoteSchema,
+  updateHealthNoteTypeSchema,
+  deleteAppointmentSchema,
+  deleteSessionSchema,
+  createActionItemSchema,
+  createHealthNoteSchema,
+  createAppointmentSchema,
+  createSessionSchema,
   type NavigateInput,
   type UpdateActionItemInput,
   type DeleteActionItemInput,
@@ -39,14 +50,24 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
   const userData = useUserData();
   const router = useRouter();
   const uid = user?.uid ?? null;
+  const onOpenHealthNoteRecorder = options?.onOpenHealthNoteRecorder;
 
   const executeToolCall = useCallback(
     async (toolName: string, input: unknown) => {
       if (!uid) return;
 
+      const invalidArgs = (name: string, errors: string[]) => {
+        console.warn(`[ToolExecutor] Ignoring invalid args for ${name}:`, errors.join("; "));
+      };
+
       switch (toolName) {
         case "navigate": {
-          const { page, highlightId } = input as NavigateInput;
+          const parsed = navigateSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("navigate", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { page, highlightId } = parsed.data as NavigateInput;
           const route = PAGE_ROUTES[page];
           if (route) {
             const url = highlightId ? `${route}?highlight=${highlightId}` : route;
@@ -56,7 +77,12 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "update_action_item": {
-          const { id, ...fields } = input as UpdateActionItemInput;
+          const parsed = updateActionItemSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("update_action_item", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id, ...fields } = parsed.data as UpdateActionItemInput;
           const item = userData.actionItems.find((a) => a.id === id);
           if (item) {
             await writeActionItem(db, uid, { ...item, ...fields });
@@ -65,19 +91,34 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "delete_action_item": {
-          const { id } = input as DeleteActionItemInput;
+          const parsed = deleteActionItemSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("delete_action_item", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id } = parsed.data as DeleteActionItemInput;
           await deleteActionItem(db, uid, id);
           break;
         }
 
         case "delete_health_note": {
-          const { id } = input as DeleteHealthNoteInput;
+          const parsed = deleteHealthNoteSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("delete_health_note", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id } = parsed.data as DeleteHealthNoteInput;
           await deleteHealthNote(db, uid, id);
           break;
         }
 
         case "update_health_note_type": {
-          const { id, type } = input as UpdateHealthNoteTypeInput;
+          const parsed = updateHealthNoteTypeSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("update_health_note_type", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id, type } = parsed.data as UpdateHealthNoteTypeInput;
           const note = userData.healthNotes.find((n) => n.id === id);
           if (note) {
             await writeHealthNote(db, uid, { ...note, type });
@@ -86,24 +127,39 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "delete_appointment": {
-          const { id } = input as DeleteAppointmentInput;
+          const parsed = deleteAppointmentSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("delete_appointment", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id } = parsed.data as DeleteAppointmentInput;
           await deleteAppointment(db, uid, id);
           break;
         }
 
         case "delete_session": {
-          const { id } = input as DeleteSessionInput;
+          const parsed = deleteSessionSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("delete_session", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { id } = parsed.data as DeleteSessionInput;
           await deleteSessionMetadata(db, uid, id);
           break;
         }
 
         case "open_health_note_recorder": {
-          options?.onOpenHealthNoteRecorder?.();
+          onOpenHealthNoteRecorder?.();
           break;
         }
 
         case "create_action_item": {
-          const { title, description, type, priority, dueBy } = input as CreateActionItemInput;
+          const parsed = createActionItemSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("create_action_item", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { title, description, type, priority, dueBy } = parsed.data as CreateActionItemInput;
           const id = crypto.randomUUID();
           await writeActionItem(db, uid, {
             id,
@@ -119,7 +175,12 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "create_health_note": {
-          const { title, description, type } = input as CreateHealthNoteInput;
+          const parsed = createHealthNoteSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("create_health_note", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { title, description, type } = parsed.data as CreateHealthNoteInput;
           const id = crypto.randomUUID();
           const now = new Date();
           await writeHealthNote(db, uid, {
@@ -135,7 +196,12 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "create_appointment": {
-          const { appointmentTime } = input as CreateAppointmentInput;
+          const parsed = createAppointmentSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("create_appointment", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { appointmentTime } = parsed.data as CreateAppointmentInput;
           const id = crypto.randomUUID();
           await writeAppointment(db, uid, {
             id,
@@ -146,7 +212,12 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
 
         case "create_session": {
-          const { title, summary, date } = input as CreateSessionInput;
+          const parsed = createSessionSchema.safeParse(input);
+          if (!parsed.success) {
+            invalidArgs("create_session", parsed.error.issues.map((issue) => issue.message));
+            break;
+          }
+          const { title, summary, date } = parsed.data as CreateSessionInput;
           const id = crypto.randomUUID();
           await writeSessionMetadata(db, uid, {
             id,
@@ -160,7 +231,7 @@ export function useToolExecutor(options?: UseToolExecutorOptions) {
         }
       }
     },
-    [uid, userData.actionItems, userData.healthNotes, router, options?.onOpenHealthNoteRecorder],
+    [uid, userData.actionItems, userData.healthNotes, router, onOpenHealthNoteRecorder],
   );
 
   return { executeToolCall };

@@ -63,6 +63,10 @@ function float32ToInt16(float32: Float32Array): ArrayBufferLike {
   return int16.buffer;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -84,6 +88,8 @@ export function useStreamingTranscription(
 
   // ---- refs ----------------------------------------------------------------
   const tokenRef = useRef<string | null>(null);
+  const tokenFetchedAtRef = useRef<number>(0);
+  const cancelStartRef = useRef<boolean>(false);
   const turnDetectionRef = useRef<{
     endOfTurnConfidenceThreshold: number;
     minEndOfTurnSilenceWhenConfident: number;
@@ -112,34 +118,59 @@ export function useStreamingTranscription(
   // Called on mount (for tokenStatus) and again at the start of each recording
   // session so we never use an expired signature.
 
-  const fetchToken = useCallback(async () => {
-    const res = await fetch("/api/assemblyai-token", { method: "POST" });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(
-        (body as { error?: string }).error ??
-          `Token request failed (${res.status})`,
-      );
-    }
-    const data = (await res.json()) as {
-      token: string;
-      turnDetection?: {
-        endOfTurnConfidenceThreshold: number;
-        minEndOfTurnSilenceWhenConfident: number;
-        maxTurnSilence: number;
+  const fetchToken = useCallback(async (options?: { force?: boolean }) => {
+    const now = Date.now();
+    const tokenAgeMs = now - tokenFetchedAtRef.current;
+    const tokenFreshEnough = tokenRef.current != null && tokenAgeMs < 8 * 60 * 1000;
+    if (!options?.force && tokenFreshEnough) {
+      return {
+        token: tokenRef.current!,
+        turnDetection: turnDetectionRef.current ?? undefined,
+        keytermsEnabled: keytermsEnabledRef.current,
       };
-      keytermsEnabled?: boolean;
-    };
-    tokenRef.current = data.token;
-    turnDetectionRef.current = data.turnDetection ?? null;
-    keytermsEnabledRef.current = data.keytermsEnabled ?? false;
-    return data;
+    }
+
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch("/api/assemblyai-token", { method: "POST" });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            (body as { error?: string }).error ??
+              `Token request failed (${res.status})`,
+          );
+        }
+        const data = (await res.json()) as {
+          token: string;
+          turnDetection?: {
+            endOfTurnConfidenceThreshold: number;
+            minEndOfTurnSilenceWhenConfident: number;
+            maxTurnSilence: number;
+          };
+          keytermsEnabled?: boolean;
+        };
+        tokenRef.current = data.token;
+        tokenFetchedAtRef.current = Date.now();
+        turnDetectionRef.current = data.turnDetection ?? null;
+        keytermsEnabledRef.current = data.keytermsEnabled ?? false;
+        setTokenError(null);
+        setTokenStatus("ready");
+        return data;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < 2) {
+          await sleep(250 * (attempt + 1));
+        }
+      }
+    }
+    throw lastError ?? new Error("Failed to fetch transcription token");
   }, []);
 
   // Initial fetch on mount so tokenStatus becomes "ready" for the UI.
   useEffect(() => {
     let cancelled = false;
-    fetchToken()
+    fetchToken({ force: true })
       .then(() => { if (!cancelled) setTokenStatus("ready"); })
       .catch((err) => {
         if (!cancelled) {
@@ -176,12 +207,26 @@ export function useStreamingTranscription(
   /** Close the streaming transcriber connection. Waits for session termination so final turn events are received. */
   const cleanupTranscriber = useCallback(async () => {
     if (transcriberRef.current) {
+      const transcriber = transcriberRef.current;
+      transcriberRef.current = null;
+
       try {
-        await transcriberRef.current.close(true);
+        let timedOut = false;
+        await Promise.race([
+          transcriber.close(true),
+          new Promise((resolve) =>
+            setTimeout(() => {
+              timedOut = true;
+              resolve(undefined);
+            }, 2500),
+          ),
+        ]);
+        if (timedOut) {
+          await transcriber.close(false);
+        }
       } catch {
         /* best-effort */
       }
-      transcriberRef.current = null;
     }
   }, []);
 
@@ -189,10 +234,11 @@ export function useStreamingTranscription(
 
   const stopRecording = useCallback(async (): Promise<string> => {
     setIsStopping(true);
+    cancelStartRef.current = true;
     try {
+      setIsRecording(false);
       cleanupAudio();
       await cleanupTranscriber();
-      setIsRecording(false);
       setInterimTranscript("");
       const { segments: segs, interim } = transcriptRef.current;
       const full = [...segs.map((s) => s.text), interim].filter(Boolean).join(" ");
@@ -205,19 +251,17 @@ export function useStreamingTranscription(
   // ---- startRecording ------------------------------------------------------
 
   const startRecording = useCallback(async () => {
-    if (!tokenRef.current) {
-      setError(new Error("Transcription token is not ready yet."));
-      return;
-    }
-
     setIsStarting(true);
+    cancelStartRef.current = false;
     try {
-      // 0. Fetch a fresh token so we never connect with an expired signature.
+      // 0. Fetch a fresh-enough token (with retries).
       await fetchToken();
+      if (cancelStartRef.current) return;
 
       // 1. Dynamically import the SDK (tree-shakes Node-only code in the
       //    browser and avoids SSR issues).
       const { StreamingTranscriber: ST } = await import("assemblyai");
+      if (cancelStartRef.current) return;
 
       // 2. Request microphone access.
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -226,6 +270,10 @@ export function useStreamingTranscription(
           sampleRate: 16_000,
         },
       });
+      if (cancelStartRef.current) {
+        mediaStream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       mediaStreamRef.current = mediaStream;
 
       // 3. Set up Web Audio capture.
@@ -241,12 +289,16 @@ export function useStreamingTranscription(
       transcriptRef.current = { segments: [], interim: "" };
       const turnDetection = turnDetectionRef.current;
       const keytermsEnabled = keytermsEnabledRef.current;
+      const token = tokenRef.current;
+      if (!token) {
+        throw new Error("Transcription token is not available");
+      }
       debugLog("Key terms are enabled:" + keytermsEnabled);
 
       const transcriber = new ST({
         sampleRate: actualSampleRate,
         formatTurns: true,
-        token: tokenRef.current,
+        token,
         ...(keytermsEnabled && {
           keytermsPrompt: [
             ...STREAMING_KEYTERMS_MEDICATIONS,
@@ -301,6 +353,10 @@ export function useStreamingTranscription(
 
       // 5. Connect to AssemblyAI.
       await transcriber.connect();
+      if (cancelStartRef.current) {
+        await transcriber.close(false).catch(() => undefined);
+        return;
+      }
       transcriberRef.current = transcriber;
 
       // 6. Wire up the audio processing pipeline.
@@ -331,9 +387,13 @@ export function useStreamingTranscription(
 
       setIsRecording(true);
       setError(null);
+      setTokenStatus("ready");
     } catch (err) {
       cleanupAudio();
       void cleanupTranscriber();
+      setIsRecording(false);
+      setTokenStatus("error");
+      setTokenError(err instanceof Error ? err : new Error(String(err)));
       setError(
         err instanceof Error ? err : new Error(String(err)),
       );

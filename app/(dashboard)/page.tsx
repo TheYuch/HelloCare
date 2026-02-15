@@ -10,6 +10,7 @@ import { ChatWidget, HomeSummary, StreamingText } from "@/app/components";
 import { SUGGESTED_PROMPTS } from "@/app/components/HomeSummary";
 import { useDrawer } from "@/app/(dashboard)/DashboardShell";
 import { useToolExecutor } from "@/app/hooks/useToolExecutor";
+import { CHAT_TOOL_NAMES } from "@/lib/chat-actions";
 import { useAuth } from "@/lib/auth-context";
 import {
   useUserMetadata,
@@ -19,22 +20,6 @@ import {
 import type { UIMessage } from "ai";
 
 const SCROLL_THRESHOLD = 80;
-
-/** All tool names the assistant can call. */
-const TOOL_NAMES = [
-  "navigate",
-  "update_action_item",
-  "delete_action_item",
-  "delete_health_note",
-  "update_health_note_type",
-  "delete_appointment",
-  "delete_session",
-  "open_health_note_recorder",
-  "create_action_item",
-  "create_health_note",
-  "create_appointment",
-  "create_session",
-] as const;
 
 function getMessageText(msg: UIMessage): string {
   return (msg.parts ?? [])
@@ -135,7 +120,7 @@ export default function Home() {
         // In AI SDK v6, tool parts have type "tool-<toolName>"
         // and fields: toolCallId, state, input.
         // With server-side execute, state progresses to "output-available".
-        for (const toolName of TOOL_NAMES) {
+        for (const toolName of CHAT_TOOL_NAMES) {
           if (part.type !== `tool-${toolName}`) continue;
           const { state, toolCallId, input } = part as {
             state: string;

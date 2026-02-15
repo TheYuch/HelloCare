@@ -31,6 +31,7 @@ export async function POST(req: Request) {
 
     const result = await generateText({
       model: openai("gpt-4o-mini"),
+      temperature: 0,
       system: systemPrompt,
       prompt: transcript,
       tools: createAssistantTools(),

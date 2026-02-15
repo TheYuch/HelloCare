@@ -77,6 +77,158 @@ export const HEALTH_NOTE_TYPE_VALUES = [
 ] as const;
 
 // ---------------------------------------------------------------------------
+// Tool registry (single source of truth for names + prompt docs)
+// ---------------------------------------------------------------------------
+
+export const CHAT_TOOL_NAMES = [
+  "navigate",
+  "update_action_item",
+  "delete_action_item",
+  "delete_health_note",
+  "update_health_note_type",
+  "delete_appointment",
+  "delete_session",
+  "open_health_note_recorder",
+  "create_action_item",
+  "create_health_note",
+  "create_appointment",
+  "create_session",
+] as const;
+
+export type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
+
+type ToolSpec = {
+  name: ChatToolName;
+  action: string;
+  requiredArgs: readonly string[];
+  optionalArgs?: readonly string[];
+  whenToUse: readonly string[];
+  avoidWhen?: readonly string[];
+};
+
+export const CHAT_TOOL_SPECS: ReadonlyArray<ToolSpec> = [
+  {
+    name: "navigate",
+    action: "Go to a page in the app",
+    requiredArgs: ["page"],
+    optionalArgs: ["highlightId"],
+    whenToUse: [
+      "User asks to open/go to/show a section",
+      "User asks to schedule an appointment (use page=schedule_appointment)",
+      "User says they are at a doctor visit and want to record (use page=doctor_visit_conversation)",
+    ],
+    avoidWhen: [
+      "Pure informational question that can be answered from context",
+    ],
+  },
+  {
+    name: "update_action_item",
+    action: "Update action-item fields",
+    requiredArgs: ["id"],
+    optionalArgs: ["status", "priority", "type"],
+    whenToUse: [
+      "User asks to mark an action item done/skipped/in progress",
+      "User asks to change action-item priority or type",
+    ],
+  },
+  {
+    name: "delete_action_item",
+    action: "Delete an action item",
+    requiredArgs: ["id"],
+    whenToUse: ["User explicitly asks to remove/delete an action item"],
+  },
+  {
+    name: "delete_health_note",
+    action: "Delete a health note",
+    requiredArgs: ["id"],
+    whenToUse: ["User explicitly asks to remove/delete a health note"],
+  },
+  {
+    name: "update_health_note_type",
+    action: "Change health-note type",
+    requiredArgs: ["id", "type"],
+    whenToUse: ["User asks to reclassify a health note (injury/recurring/temporary)"],
+  },
+  {
+    name: "delete_appointment",
+    action: "Delete an appointment",
+    requiredArgs: ["id"],
+    whenToUse: ["User explicitly asks to cancel/delete an appointment entry"],
+  },
+  {
+    name: "delete_session",
+    action: "Delete a past session",
+    requiredArgs: ["id"],
+    whenToUse: ["User explicitly asks to delete a past session/visit record"],
+  },
+  {
+    name: "open_health_note_recorder",
+    action: "Open voice health-note recorder",
+    requiredArgs: [],
+    whenToUse: ["User asks to record a health note with microphone/voice"],
+    avoidWhen: ["User asks to create a text health note (use create_health_note instead)"],
+  },
+  {
+    name: "create_action_item",
+    action: "Create an action item",
+    requiredArgs: ["title"],
+    optionalArgs: ["description", "type", "priority", "dueBy"],
+    whenToUse: ["User asks to add/create a task, reminder, or follow-up item"],
+  },
+  {
+    name: "create_health_note",
+    action: "Create a health note (text)",
+    requiredArgs: ["title", "description"],
+    optionalArgs: ["type"],
+    whenToUse: ["User asks to log/add a health note in text"],
+    avoidWhen: ["User asks to record by voice (use open_health_note_recorder)"],
+  },
+  {
+    name: "create_appointment",
+    action: "Create an appointment",
+    requiredArgs: ["appointmentTime"],
+    whenToUse: ["User asks to add/create an appointment"],
+  },
+  {
+    name: "create_session",
+    action: "Create a past session record",
+    requiredArgs: ["title"],
+    optionalArgs: ["summary", "date"],
+    whenToUse: ["User asks to log a past visit/session"],
+  },
+] as const;
+
+export function buildToolCatalogForPrompt(): string {
+  const lines: string[] = [];
+  lines.push("## Available tools (action -> tool)");
+  for (const spec of CHAT_TOOL_SPECS) {
+    lines.push("");
+    lines.push(`### ${spec.name}`);
+    lines.push(`Action: ${spec.action}`);
+    lines.push(
+      `Required args: ${spec.requiredArgs.length > 0 ? spec.requiredArgs.join(", ") : "(none)"}`,
+    );
+    if (spec.optionalArgs && spec.optionalArgs.length > 0) {
+      lines.push(`Optional args: ${spec.optionalArgs.join(", ")}`);
+    }
+    lines.push(`Use when: ${spec.whenToUse.join(" | ")}`);
+    if (spec.avoidWhen && spec.avoidWhen.length > 0) {
+      lines.push(`Do not use when: ${spec.avoidWhen.join(" | ")}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("### Enum values");
+  lines.push(`- navigate.page: ${NAVIGATE_PAGES.join(", ")}`);
+  lines.push(`- action_item.status: ${ACTION_ITEM_STATUS_VALUES.join(", ")}`);
+  lines.push(`- action_item.priority: ${ACTION_ITEM_PRIORITY_VALUES.join(", ")}`);
+  lines.push(`- action_item.type: ${ACTION_ITEM_TYPE_VALUES.join(", ")}`);
+  lines.push(`- health_note.type: ${HEALTH_NOTE_TYPE_VALUES.join(", ")}`);
+  lines.push("- date/time fields: use valid ISO 8601 strings");
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Zod schemas for each tool's input (used by the API route)
 // ---------------------------------------------------------------------------
 
@@ -127,7 +279,11 @@ export const createActionItemSchema = z.object({
   description: z.string().optional().describe("Longer description of what to do"),
   type: z.enum(ACTION_ITEM_TYPE_VALUES).optional().describe("Category (defaults to Other)"),
   priority: z.enum(ACTION_ITEM_PRIORITY_VALUES).optional().describe("Priority level (defaults to medium)"),
-  dueBy: z.string().optional().describe("ISO 8601 date string for the due date (defaults to 7 days from now)"),
+  dueBy: z
+    .string()
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Must be a valid ISO 8601 date string")
+    .optional()
+    .describe("ISO 8601 date string for the due date (defaults to 7 days from now)"),
 });
 
 export const createHealthNoteSchema = z.object({
@@ -137,13 +293,20 @@ export const createHealthNoteSchema = z.object({
 });
 
 export const createAppointmentSchema = z.object({
-  appointmentTime: z.string().describe("ISO 8601 date-time string for the appointment"),
+  appointmentTime: z
+    .string()
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Must be a valid ISO 8601 date-time string")
+    .describe("ISO 8601 date-time string for the appointment"),
 });
 
 export const createSessionSchema = z.object({
   title: z.string().describe("Short title for the past session / visit"),
   summary: z.string().optional().describe("Summary of what happened during the visit"),
-  date: z.string().optional().describe("ISO 8601 date string for when the visit occurred (defaults to now)"),
+  date: z
+    .string()
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Must be a valid ISO 8601 date string")
+    .optional()
+    .describe("ISO 8601 date string for when the visit occurred (defaults to now)"),
 });
 
 // ---------------------------------------------------------------------------
