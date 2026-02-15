@@ -74,7 +74,7 @@ export default function HealthNotesPage() {
 
   return (
     <div className="w-full min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+      <header className="flex items-center justify-between px-4 py-3">
         <button
           type="button"
           onClick={() => openDrawer?.()}
