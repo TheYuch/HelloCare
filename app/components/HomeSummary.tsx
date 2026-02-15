@@ -23,6 +23,7 @@ const DEFAULT_PILL_STYLE = "bg-neutral-100 text-neutral-600 border-neutral-200";
 
 /** Suggested prompts shown when chat is available; clicking sends that message. */
 export const SUGGESTED_PROMPTS = [
+  "Summarize my overall health.",
   "What action items do I have?",
   "What happened in my previous health note?",
   "Summarize my most recent health notes.",
