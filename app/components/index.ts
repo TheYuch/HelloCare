@@ -8,3 +8,5 @@ export type { ProfileFormProps } from "./ProfileForm";
 export { AddEntrySection } from "./AddEntrySection";
 export { HomeLayout } from "./HomeLayout";
 export { HomeHero } from "./HomeHero";
+export { Drawer } from "./Drawer";
+export { ChatWidget } from "./ChatWidget";
