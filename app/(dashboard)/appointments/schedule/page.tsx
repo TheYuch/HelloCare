@@ -81,12 +81,6 @@ type Timeslot = {
 
 const MAX_TIMESLOTS = 3;
 
-const TEMP_TIMESLOTS: Timeslot[] = [
-  { label: "July 14th, 2026 at 10:00 AM", available: false },
-  { label: "July 14th, 2026 at 2:30 PM", available: true },
-  { label: "July 15th, 2026 at 9:00 AM", available: false },
-];
-
 function AwaitingConfirmationState({
   timeslots,
   onToggleAvailability,
@@ -129,25 +123,50 @@ function AwaitingConfirmationState({
 export default function SchedulePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [schedulingState, setSchedulingState] = useState<SchedulingStateType>("awaiting_confirmation");
-  const [timeslots, setTimeslots] = useState<Timeslot[]>(TEMP_TIMESLOTS);
+  const [schedulingState, setSchedulingState] = useState<SchedulingStateType>("idle");
+  const [timeslots, setTimeslots] = useState<Timeslot[]>([]);
   /* eslint-disable @typescript-eslint/no-unused-vars -- reserved for future implementation */
   const [error, setError] = useState<string | null>(null);
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
+  // Subscribe to the SSE timeslot stream while scheduling
+  useEffect(() => {
+    if (schedulingState !== "scheduling") return;
+
+    const es = new EventSource("/api/timeslots/stream");
+    es.onmessage = (e) => {
+      setTimeslots(JSON.parse(e.data));
+      setSchedulingState("awaiting_confirmation");
+    };
+    return () => es.close();
+  }, [schedulingState]);
+
   async function startVapiCall() {
     const uid = user?.uid;
-    if (!uid) return;
+    if (!uid) { console.error("[startVapiCall] No user uid"); return; }
 
     const result = await readUserMetadata(db, uid);
     const phoneNumber = result.ok ? result.data?.hospitalPhoneNumber : undefined;
-    if (!phoneNumber) return;
+    if (!phoneNumber) { console.error("[startVapiCall] No phone number found for user", uid); return; }
 
-    await fetch("/api/vapi", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber }),
-    });
+    const firstName = (result.ok ? result.data?.firstName : "") ?? "";
+    const lastName = (result.ok ? result.data?.lastName : "") ?? "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    console.log("[startVapiCall] Calling", fullName, "at", phoneNumber);
+
+    try {
+      const res = await fetch("/api/vapi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber, fullName }),
+      });
+      if (!res.ok) {
+        console.error("[startVapiCall] API returned", res.status, await res.text());
+      }
+    } catch (err) {
+      console.error("[startVapiCall] Failed to initiate outbound call:", err);
+    }
   }
 
   const handleToggleAvailability = (label: string) => {
