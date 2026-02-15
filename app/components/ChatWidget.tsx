@@ -24,6 +24,10 @@ type ChatWidgetProps = {
   /** Single suggested prompt (one at a time); clicking sends that text. */
   suggestedPrompt?: string;
   onPromptClick?: (text: string) => void;
+  /** When true, opens the health-note recording modal from an external trigger (e.g. LLM tool call). */
+  externalRecordModalOpen?: boolean;
+  /** Called when the externally-triggered modal closes, so the parent can reset state. */
+  onRecordModalClose?: () => void;
 };
 
 const WAVEFORM_BARS = 40;
@@ -101,9 +105,10 @@ function RecordingWaveform({ level }: { level: number }) {
   );
 }
 
-export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick }: ChatWidgetProps) {
+export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick, externalRecordModalOpen, onRecordModalClose }: ChatWidgetProps) {
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
+  const recordModalOpen = internalModalOpen || (externalRecordModalOpen ?? false);
   const [inputValue, setInputValue] = useState("");
   const [audioLevel, setAudioLevel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -198,7 +203,7 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick }:
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => setRecordModalOpen(true)}
+          onClick={() => setInternalModalOpen(true)}
           className="flex items-center gap-1.5 rounded-full bg-neutral-800 px-3 py-2.5 text-xs text-white transition-colors hover:bg-neutral-700 active:bg-neutral-700"
         >
           <HiOutlinePencil className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
@@ -256,7 +261,10 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick }:
       </div>
       <RecordHealthNoteModal
         isOpen={recordModalOpen}
-        onClose={() => setRecordModalOpen(false)}
+        onClose={() => {
+          setInternalModalOpen(false);
+          onRecordModalClose?.();
+        }}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HiOutlineMenuAlt4 } from "react-icons/hi";
 import { TbArrowBackUp } from "react-icons/tb";
-import { useDrawer } from "@/app/(dashboard)/layout";
+import { useDrawer } from "@/app/(dashboard)/DashboardShell";
 import { useStreamingTranscription } from "@/app/hooks/useStreamingTranscription";
 import { VIEW_CARD_CLASS, VIEW_COMPONENTS } from "./views";
 import { formatConversationDate, parseDateFromSearchParams, getTrailingWords } from "./utils";

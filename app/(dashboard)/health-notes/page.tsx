@@ -5,7 +5,7 @@ import { HiOutlineMenuAlt4, HiOutlineTrash } from "react-icons/hi";
 import { PillDropdown } from "@/app/components/PillDropdown";
 import { Spinner } from "@/app/components/Spinner";
 import { Toast } from "@/app/components/Toast";
-import { useDrawer } from "@/app/(dashboard)/layout";
+import { useDrawer } from "@/app/(dashboard)/DashboardShell";
 import { useAuth } from "@/lib/auth-context";
 import { db } from "@/lib/firebase";
 import { deleteHealthNote, HEALTH_NOTE_TYPES, useHealthNotes, writeHealthNote } from "@/lib/firestore";

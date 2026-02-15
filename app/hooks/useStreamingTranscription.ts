@@ -107,50 +107,48 @@ export function useStreamingTranscription(
     typeof navigator !== "undefined" &&
     !!navigator.mediaDevices?.getUserMedia;
 
-  // ---- fetch temporary token on mount --------------------------------------
+  // ---- fetch token -----------------------------------------------------------
+  // Shared helper that fetches a fresh temporary token from the API.
+  // Called on mount (for tokenStatus) and again at the start of each recording
+  // session so we never use an expired signature.
+
+  const fetchToken = useCallback(async () => {
+    const res = await fetch("/api/assemblyai-token", { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        (body as { error?: string }).error ??
+          `Token request failed (${res.status})`,
+      );
+    }
+    const data = (await res.json()) as {
+      token: string;
+      turnDetection?: {
+        endOfTurnConfidenceThreshold: number;
+        minEndOfTurnSilenceWhenConfident: number;
+        maxTurnSilence: number;
+      };
+      keytermsEnabled?: boolean;
+    };
+    tokenRef.current = data.token;
+    turnDetectionRef.current = data.turnDetection ?? null;
+    keytermsEnabledRef.current = data.keytermsEnabled ?? false;
+    return data;
+  }, []);
+
+  // Initial fetch on mount so tokenStatus becomes "ready" for the UI.
   useEffect(() => {
     let cancelled = false;
-
-    async function fetchToken() {
-      try {
-        const res = await fetch("/api/assemblyai-token", { method: "POST" });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(
-            (body as { error?: string }).error ??
-              `Token request failed (${res.status})`,
-          );
-        }
-        const data = (await res.json()) as {
-          token: string;
-          turnDetection?: {
-            endOfTurnConfidenceThreshold: number;
-            minEndOfTurnSilenceWhenConfident: number;
-            maxTurnSilence: number;
-          };
-          keytermsEnabled?: boolean;
-        };
+    fetchToken()
+      .then(() => { if (!cancelled) setTokenStatus("ready"); })
+      .catch((err) => {
         if (!cancelled) {
-          tokenRef.current = data.token;
-          turnDetectionRef.current = data.turnDetection ?? null;
-          keytermsEnabledRef.current = data.keytermsEnabled ?? false;
-          setTokenStatus("ready");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setTokenError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
+          setTokenError(err instanceof Error ? err : new Error(String(err)));
           setTokenStatus("error");
         }
-      }
-    }
-
-    fetchToken();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      });
+    return () => { cancelled = true; };
+  }, [fetchToken]);
 
   // ---- cleanup helpers -----------------------------------------------------
 
@@ -214,6 +212,9 @@ export function useStreamingTranscription(
 
     setIsStarting(true);
     try {
+      // 0. Fetch a fresh token so we never connect with an expired signature.
+      await fetchToken();
+
       // 1. Dynamically import the SDK (tree-shakes Node-only code in the
       //    browser and avoids SSR issues).
       const { StreamingTranscriber: ST } = await import("assemblyai");
@@ -339,7 +340,7 @@ export function useStreamingTranscription(
     } finally {
       setIsStarting(false);
     }
-  }, [cleanupAudio, cleanupTranscriber]);
+  }, [cleanupAudio, cleanupTranscriber, fetchToken]);
 
   // ---- clearError / clearTranscript ----------------------------------------
 

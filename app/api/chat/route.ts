@@ -1,84 +1,12 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { NextResponse } from "next/server";
-import type { HealthNote, ActionItem, SessionMetadata, UserMetadata } from "@/lib/firestore/types";
+import { createAssistantTools } from "@/lib/assistant-tools";
+import { buildSystemPrompt, type ChatContext } from "@/lib/chat-system-prompt";
 
-type ChatContext = {
-  userMetadata?: UserMetadata | null;
-  healthNotes?: HealthNote[];
-  actionItems?: ActionItem[];
-  sessionMetadata?: SessionMetadata[];
-};
-
-/** Format date in UTC so calendar dates match (e.g. action item due dates from LLM). */
-function formatDate(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function buildSystemPrompt(context: ChatContext): string {
-  const parts: string[] = [
-    "You are a helpful, empathetic health assistant for HelloCare. You help users understand their health notes, action items, and past visits. Be concise, clear, and supportive. Do not provide medical advice—encourage users to consult their care team for medical decisions.",
-    "",
-    "## Critical rules",
-    "- Use ONLY the information provided in the context below. Do not invent, assume, or hallucinate any data.",
-    "- If you do not have the information needed to answer a question, say so clearly—e.g. \"I don't have that information,\" \"Not available,\" or \"I don't know.\" It is better to say you don't know than to guess.",
-    "- The \"Past sessions\" section (if present) contains PAST visits/sessions only. Do NOT use it to answer questions about upcoming or future appointments. For questions like \"What are my upcoming appointments?\" or \"When is my next appointment?\" you have no data in this context; respond that you don't have that information and suggest they check the app's schedule or contact their provider.",
-  ];
-
-  if (context.userMetadata) {
-    const { firstName, lastName, preferredLanguage } = context.userMetadata;
-    parts.push(
-      "",
-      "## User information",
-      `- Name: ${firstName} ${lastName}`,
-      preferredLanguage ? `- Preferred language: ${preferredLanguage}` : ""
-    );
-  }
-
-  if (context.healthNotes && context.healthNotes.length > 0) {
-    parts.push(
-      "",
-      "## Health notes (from visits)",
-      ...context.healthNotes.map(
-        (n) =>
-          `- [${formatDate(n.date)}] ${n.title}: ${n.description} (type: ${n.type})`
-      )
-    );
-  }
-
-  if (context.actionItems && context.actionItems.length > 0) {
-    parts.push(
-      "",
-      "## Action items",
-      ...context.actionItems.map((a) => {
-        const med = a.medication
-          ? ` (medication: ${a.medication.name} ${a.medication.dose}${a.medication.dosageUnit}, due by ${formatDate(a.dueBy)})`
-          : "";
-        return `- ${a.title || a.description}${med} [status: ${a.status}, due: ${formatDate(a.dueBy)}]`;
-      })
-    );
-  }
-
-  if (context.sessionMetadata && context.sessionMetadata.length > 0) {
-    parts.push(
-      "",
-      "## Past sessions only (NOT upcoming appointments)",
-      "The following are past visits/sessions. Do NOT use this list for questions about upcoming or future appointments.",
-      ...context.sessionMetadata.map(
-        (s) =>
-          `- [${formatDate(s.date)}] ${s.title}: ${s.summary || "(no summary)"}`
-      )
-    );
-  }
-
-  return parts.filter(Boolean).join("\n");
-}
+// ---------------------------------------------------------------------------
+// Route handler
+// ---------------------------------------------------------------------------
 
 export async function POST(req: Request) {
   try {
@@ -91,7 +19,7 @@ export async function POST(req: Request) {
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json(
         { error: "messages is required and must be an array" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -101,6 +29,7 @@ export async function POST(req: Request) {
       model: openai("gpt-4o-mini"),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
+      tools: createAssistantTools(),
     });
 
     return result.toUIMessageStreamResponse();
@@ -112,7 +41,7 @@ export async function POST(req: Request) {
         error: "Failed to process chat request",
         ...(process.env.NODE_ENV === "development" && { detail: message }),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
