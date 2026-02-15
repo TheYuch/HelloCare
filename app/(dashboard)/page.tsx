@@ -7,6 +7,7 @@ import { HiOutlineChatBubbleLeftRight } from "react-icons/hi2";
 import { motion } from "motion/react";
 import { useChat } from "@ai-sdk/react";
 import { ChatWidget, HomeSummary, StreamingText } from "@/app/components";
+import { SUGGESTED_PROMPTS } from "@/app/components/HomeSummary";
 import { useDrawer } from "@/app/(dashboard)/layout";
 import { useUserMetadata, useUserData } from "@/lib/firestore";
 import type { UIMessage } from "ai";
@@ -32,6 +33,7 @@ export default function Home() {
   const messagesContentRef = useRef<HTMLDivElement>(null);
   const userAtBottomRef = useRef(true);
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const [suggestedPromptIndex, setSuggestedPromptIndex] = useState(0);
 
   const chatContext = useMemo(
     () => ({
@@ -86,6 +88,16 @@ export default function Home() {
       );
     },
     [sendMessage, chatContext]
+  );
+
+  const currentSuggestedPrompt =
+    SUGGESTED_PROMPTS[suggestedPromptIndex % SUGGESTED_PROMPTS.length];
+  const handlePromptClick = useCallback(
+    (text: string) => {
+      handleSend(text);
+      setSuggestedPromptIndex((i) => i + 1);
+    },
+    [handleSend]
   );
 
   const handleScroll = useCallback(() => {
@@ -208,7 +220,12 @@ export default function Home() {
           </div>
         )}
       </div>
-      <ChatWidget onSend={handleSend} disabled={isLoading} />
+      <ChatWidget
+        onSend={handleSend}
+        disabled={isLoading}
+        suggestedPrompt={currentSuggestedPrompt}
+        onPromptClick={handlePromptClick}
+      />
     </div>
   );
 }

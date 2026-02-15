@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HiMicrophone, HiStop } from "react-icons/hi";
 import {
+  HiArrowRight,
   HiOutlineArrowUp,
   HiOutlineCalendar,
   HiOutlinePencil,
@@ -14,9 +15,15 @@ import { Spinner } from "./Spinner";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+const SUGGESTED_PROMPT_BUTTON_CLASS =
+  "flex w-full items-center justify-between gap-3 rounded-full border border-neutral-200 px-4 py-3 text-left text-sm text-neutral-900 transition-colors hover:bg-neutral-100";
+
 type ChatWidgetProps = {
   onSend?: (content: string) => void;
   disabled?: boolean;
+  /** Single suggested prompt (one at a time); clicking sends that text. */
+  suggestedPrompt?: string;
+  onPromptClick?: (text: string) => void;
 };
 
 const WAVEFORM_BARS = 40;
@@ -94,7 +101,7 @@ function RecordingWaveform({ level }: { level: number }) {
   );
 }
 
-export function ChatWidget({ onSend, disabled }: ChatWidgetProps) {
+export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick }: ChatWidgetProps) {
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -169,11 +176,24 @@ export function ChatWidget({ onSend, disabled }: ChatWidgetProps) {
   const canRecord = isSupported && tokenStatus === "ready" && !disabled;
   const isWaveformMode = isRecording || isStarting || isStopping;
 
+  const showSuggestion = suggestedPrompt && onPromptClick && !isWaveformMode;
+
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-30 flex flex-col gap-2 rounded-t-2xl bg-white px-4 pt-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] transition-transform duration-200 ease-out md:left-auto md:right-0 md:px-6 md:w-[min(24rem,calc(100vw-3rem))]"
       style={{ transform: `translateY(-${keyboardOffset}px)` }}
     >
+      {showSuggestion && (
+        <button
+          type="button"
+          onClick={() => onPromptClick(suggestedPrompt)}
+          disabled={disabled}
+          className={SUGGESTED_PROMPT_BUTTON_CLASS}
+        >
+          <span className="min-w-0 flex-1 truncate">{suggestedPrompt}</span>
+          <HiArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
+        </button>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
