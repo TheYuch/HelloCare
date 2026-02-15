@@ -25,6 +25,7 @@ export type {
   UserMetadataUpdatePayload,
 } from "./types";
 export { sortActionItemsByPriorityAndDueDate } from "./actionItems";
+export { sortHealthNotesByCreatedDesc } from "./healthNotes";
 export { toFirestoreValue } from "./serialize";
 export {
   readUserMetadata,

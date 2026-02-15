@@ -14,6 +14,7 @@ import {
   subscribeActionItems,
   subscribeSessionMetadata,
 } from "./api";
+import { sortHealthNotesByCreatedDesc } from "./healthNotes";
 import type {
   ActionItem,
   HealthNote,
@@ -230,7 +231,7 @@ export function useUserData() {
       setState((s) => ({ ...s, error: s.error ?? err }));
 
     const unsubHn = subscribeHealthNotes(db, uid, (data) => {
-      setState((s) => ({ ...s, healthNotes: data }));
+      setState((s) => ({ ...s, healthNotes: sortHealthNotesByCreatedDesc(data) }));
       markReceived();
     }, onError);
 
@@ -326,7 +327,12 @@ export function useHealthNotes(): HealthNotesState {
     const unsubscribe = subscribeHealthNotes(
       db,
       uid,
-      (data) => setState({ healthNotes: data, loading: false, error: null }),
+      (data) =>
+        setState({
+          healthNotes: sortHealthNotesByCreatedDesc(data),
+          loading: false,
+          error: null,
+        }),
       (err) => setState((s) => ({ ...s, error: err, loading: false }))
     );
 
