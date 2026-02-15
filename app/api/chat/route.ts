@@ -10,12 +10,14 @@ type ChatContext = {
   sessionMetadata?: SessionMetadata[];
 };
 
+/** Format date in UTC so calendar dates match (e.g. action item due dates from LLM). */
 function formatDate(d: Date | string): string {
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 

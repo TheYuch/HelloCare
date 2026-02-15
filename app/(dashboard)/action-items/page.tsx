@@ -6,10 +6,12 @@ import { useDrawer } from "@/app/(dashboard)/layout";
 import { sortActionItemsByPriorityAndDueDate, useActionItems } from "@/lib/firestore";
 import type { ActionItem } from "@/lib/firestore";
 
+/** Format due date in UTC so calendar date matches stored value (LLM sends date-only as midnight UTC). */
 function formatDueDate(date: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   }).format(date);
 }
 

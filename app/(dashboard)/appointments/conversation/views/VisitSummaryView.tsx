@@ -91,6 +91,7 @@ function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
+/** Format due date in UTC so calendar date matches LLM (e.g. "June 1" stays June 1). */
 function formatDueDate(iso: string | null): string {
   if (!iso) return "No due date";
   const d = new Date(iso);
@@ -99,6 +100,7 @@ function formatDueDate(iso: string | null): string {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 
