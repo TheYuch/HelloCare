@@ -143,23 +143,41 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick, e
     };
   }, []);
 
-  const handleSend = () => {
+  const stopAndSendTranscript = useCallback(async () => {
+    const transcript = (await stopRecording()).trim();
+    if (!transcript) return;
+
+    if (onSend && !disabled) {
+      onSend(transcript);
+      setInputValue("");
+      return;
+    }
+
+    // Fallback for non-chat contexts that do not provide onSend.
+    setInputValue(transcript);
+    inputRef.current?.focus();
+  }, [disabled, onSend, stopRecording]);
+
+  const handleSend = useCallback(async () => {
+    if (disabled || isStarting || isStopping) return;
+
+    if (isRecording) {
+      await stopAndSendTranscript();
+      return;
+    }
+
     const trimmed = inputValue.trim();
-    if (trimmed && onSend && !disabled && !isRecording && !isStarting && !isStopping) {
+    if (trimmed && onSend) {
       onSend(trimmed);
       setInputValue("");
     }
-  };
+  }, [disabled, isRecording, isStarting, isStopping, inputValue, onSend, stopAndSendTranscript]);
 
   const handleMicToggle = useCallback(async () => {
     if (disabled || isStarting || isStopping) return;
 
     if (isRecording) {
-      const transcript = (await stopRecording()).trim();
-      if (transcript) {
-        setInputValue(transcript);
-      }
-      inputRef.current?.focus();
+      await stopAndSendTranscript();
       return;
     }
 
@@ -175,7 +193,7 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick, e
     isStarting,
     isStopping,
     startRecording,
-    stopRecording,
+    stopAndSendTranscript,
   ]);
 
   const canRecord = isSupported && tokenStatus === "ready" && !disabled;
@@ -242,7 +260,12 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick, e
             ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
             type="text"
             placeholder="Ask any question..."
             disabled={disabled}
@@ -251,8 +274,8 @@ export function ChatWidget({ onSend, disabled, suggestedPrompt, onPromptClick, e
         )}
         <button
           type="button"
-          onClick={handleSend}
-          disabled={disabled || isWaveformMode}
+          onClick={() => void handleSend()}
+          disabled={disabled || isStarting || isStopping}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-white transition-colors hover:bg-neutral-700 disabled:opacity-60 disabled:cursor-not-allowed"
           aria-label="Send"
         >

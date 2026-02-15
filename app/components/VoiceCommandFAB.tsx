@@ -55,7 +55,6 @@ export function VoiceCommandFAB() {
   const fabStateRef = useRef<FabState>("idle");
   const [userTranscript, setUserTranscript] = useState("");
   const [responseText, setResponseText] = useState("");
-  const [audioLevel, setAudioLevel] = useState(0);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Keep ref in sync so the click handler always reads the latest state.
@@ -77,9 +76,7 @@ export function VoiceCommandFAB() {
     clearTranscript,
     isSupported,
     tokenStatus,
-  } = useStreamingTranscription({
-    onAudioLevel: useCallback((level: number) => setAudioLevel(level), []),
-  });
+  } = useStreamingTranscription();
 
   // Build context for the voice-command API (same shape as chat context)
   const voiceContext = useMemo(
@@ -219,7 +216,6 @@ export function VoiceCommandFAB() {
     // Start recording
     clearError();
     clearTranscript();
-    setAudioLevel(0);
     setUserTranscript("");
     setResponseText("");
     setFabState("recording");
@@ -271,7 +267,7 @@ export function VoiceCommandFAB() {
             {/* User transcript (light bg, truncated) */}
             <div className="rounded-2xl bg-neutral-200 px-3 py-2 text-xs text-neutral-600 shadow">
               {userTranscript.length > MAX_USER_TEXT_LENGTH
-                ? `${userTranscript.slice(0, MAX_USER_TEXT_LENGTH)}…`
+                ? `…${userTranscript.slice(-MAX_USER_TEXT_LENGTH)}`
                 : userTranscript}
             </div>
 
@@ -314,22 +310,6 @@ export function VoiceCommandFAB() {
           <HiMicrophone className="h-6 w-6" />
         )}
       </button>
-
-      {/* Recording pulse ring */}
-      <AnimatePresence>
-        {isActive && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{
-              opacity: [0.4, 0.1],
-              scale: [1, 1.4 + audioLevel * 0.4],
-            }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.8, repeat: Infinity, ease: "easeOut" }}
-            className="pointer-events-none absolute bottom-0 left-0 h-14 w-14 rounded-full bg-red-500"
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
