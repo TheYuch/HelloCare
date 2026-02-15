@@ -172,13 +172,27 @@ export default function SchedulePage() {
   useEffect(() => {
     if (schedulingState !== "scheduling") return;
 
+    console.log("[schedule] Opening SSE connection to /api/timeslots/stream");
     const es = new EventSource("/api/timeslots/stream");
+
+    es.onopen = () => console.log("[schedule] SSE connection opened");
+
     es.onmessage = (e) => {
+      console.log("[schedule] SSE message received:", e.data);
       const slots: Timeslot[] = JSON.parse(e.data);
+      console.log(`[schedule] Parsed ${slots.length} timeslot(s)`, slots);
       setTimeslots(slots);
       setSchedulingState(slots.length > 0 ? "awaiting_confirmation" : "no_availability");
     };
-    return () => es.close();
+
+    es.onerror = (err) => {
+      console.error("[schedule] SSE error:", err);
+    };
+
+    return () => {
+      console.log("[schedule] Closing SSE connection");
+      es.close();
+    };
   }, [schedulingState]);
 
   async function startVapiCall() {
@@ -192,7 +206,7 @@ export default function SchedulePage() {
     const firstName = (result.ok ? result.data?.firstName : "") ?? "";
     const lastName = (result.ok ? result.data?.lastName : "") ?? "";
     const fullName = `${firstName} ${lastName}`.trim();
-
+return;
     try {
       const res = await fetch("/api/vapi", {
         method: "POST",
@@ -219,18 +233,23 @@ export default function SchedulePage() {
 
   const handleProceed = async () => {
     const selected = timeslots.find((s) => s.available);
-    if (!selected) return;
+    if (!selected) { console.warn("[handleProceed] No slot selected"); return; }
 
     const uid = user?.uid;
     if (!uid) { console.error("[handleProceed] No user uid"); return; }
 
+    console.log(`[handleProceed] Confirming slot: "${selected.label}" for user ${uid}`);
+
     try {
-      await fetch("/api/confirmTimeslot", {
+      console.log("[handleProceed] POST /api/confirmTimeslot…");
+      const confirmRes = await fetch("/api/confirmTimeslot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label: selected.label }),
       });
+      console.log(`[handleProceed] confirmTimeslot response: ${confirmRes.status}`);
 
+      console.log("[handleProceed] Writing appointment to Firestore…");
       const result = await writeAppointment(db, uid, {
         id: crypto.randomUUID(),
         appointmentTime: new Date(selected.label),
@@ -239,6 +258,8 @@ export default function SchedulePage() {
 
       if (!result.ok) {
         console.error("[handleProceed] Failed to write appointment:", result.error);
+      } else {
+        console.log("[handleProceed] ✅ Appointment written successfully");
       }
 
       setSchedulingState("completed");
