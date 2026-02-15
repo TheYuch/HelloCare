@@ -2,6 +2,15 @@
  * Helpers for action items (sorting, etc.).
  */
 
+/** Canonical status definitions for action items. Single source of truth. */
+export const ACTION_ITEM_STATUSES = [
+  { value: "pending", label: "Pending" },
+  { value: "in_progress", label: "In progress" },
+  { value: "done", label: "Done" },
+] as const;
+
+export type ActionItemStatus = (typeof ACTION_ITEM_STATUSES)[number]["value"];
+
 const PRIORITY_ORDER: Record<string, number> = {
   high: 0,
   medium: 1,

@@ -1,14 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { HiOutlineMenuAlt4, HiOutlineTrash } from "react-icons/hi";
+import { HiOutlineMenuAlt4, HiOutlineTrash, HiChevronDown } from "react-icons/hi";
 import { Spinner } from "@/app/components/Spinner";
 import { Toast } from "@/app/components/Toast";
 import { useDrawer } from "@/app/(dashboard)/layout";
 import { useAuth } from "@/lib/auth-context";
 import { db } from "@/lib/firebase";
-import { deleteActionItem, sortActionItemsByPriorityAndDueDate, useActionItems } from "@/lib/firestore";
-import type { ActionItem } from "@/lib/firestore";
+import {
+  ACTION_ITEM_STATUSES,
+  deleteActionItem,
+  sortActionItemsByPriorityAndDueDate,
+  useActionItems,
+  writeActionItem,
+} from "@/lib/firestore";
+import type { ActionItem, ActionItemStatus } from "@/lib/firestore";
 
 /** Format due date in UTC so calendar date matches stored value (LLM sends date-only as midnight UTC). */
 function formatDueDate(date: Date): string {
@@ -19,12 +25,47 @@ function formatDueDate(date: Date): string {
   }).format(date);
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-blue-50 text-blue-700 border-blue-200",
+  in_progress: "bg-amber-50 text-amber-700 border-amber-200",
+  done: "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+
+function StatusDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (status: ActionItemStatus) => void;
+}) {
+  const style = STATUS_STYLES[value] ?? STATUS_STYLES.pending;
+  return (
+    <span className={`relative inline-flex items-center rounded-full border ${style}`}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as ActionItemStatus)}
+        className="appearance-none cursor-pointer bg-transparent pl-2.5 pr-5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-neutral-400 rounded-full"
+        aria-label="Change status"
+      >
+        {ACTION_ITEM_STATUSES.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+      <HiChevronDown className="pointer-events-none absolute right-1.5 w-3 h-3 opacity-60" />
+    </span>
+  );
+}
+
 function ActionItemCard({
   item,
   onDelete,
+  onStatusChange,
 }: {
   item: ActionItem;
   onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: ActionItemStatus) => void;
 }) {
   const hasMedication = item.medication != null;
 
@@ -64,11 +105,10 @@ function ActionItemCard({
               {item.priority}
             </span>
           )}
-          {item.status && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              {item.status}
-            </span>
-          )}
+          <StatusDropdown
+            value={item.status}
+            onChange={(status) => onStatusChange(item.id, status)}
+          />
         </div>
         {item.description ? (
           <p className="text-sm text-neutral-600">{item.description}</p>
@@ -116,25 +156,38 @@ export default function ActionItemsPage() {
   const { actionItems, loading, error } = useActionItems();
   const { openDrawer } = useDrawer() ?? {};
   const { user } = useAuth();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showDeletedToast, setShowDeletedToast] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleDelete = async (itemId: string) => {
     if (!user?.uid) return;
-    setDeleteError(null);
+    setOperationError(null);
     const result = await deleteActionItem(db, user.uid, itemId);
     if (result.ok) {
-      setShowDeletedToast(true);
+      setToastMessage("Deleted");
     } else {
-      setDeleteError(result.error.message);
+      setOperationError(result.error.message);
     }
   };
 
-  const dismissToast = useCallback(() => setShowDeletedToast(false), []);
+  const handleStatusChange = async (itemId: string, status: ActionItemStatus) => {
+    if (!user?.uid) return;
+    setOperationError(null);
+    const item = actionItems.find((ai) => ai.id === itemId);
+    if (!item) return;
+    const result = await writeActionItem(db, user.uid, { ...item, status });
+    if (result.ok) {
+      setToastMessage("Status updated");
+    } else {
+      setOperationError(result.error.message);
+    }
+  };
+
+  const dismissToast = useCallback(() => setToastMessage(null), []);
 
   return (
     <div className="w-full min-h-screen flex flex-col">
-      <Toast message="Deleted" visible={showDeletedToast} onDismiss={dismissToast} />
+      <Toast message={toastMessage ?? ""} visible={toastMessage != null} onDismiss={dismissToast} />
       <header className="flex items-center justify-between px-4 py-3">
         <button
           type="button"
@@ -154,9 +207,9 @@ export default function ActionItemsPage() {
         </p>
       </div>
 
-      {deleteError && (
+      {operationError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-center">
-          <p className="text-sm text-rose-800">{deleteError}</p>
+          <p className="text-sm text-rose-800">{operationError}</p>
         </div>
       )}
 
@@ -175,7 +228,7 @@ export default function ActionItemsPage() {
         <ul className="flex flex-col gap-3 list-none p-0 m-0">
           {sortActionItemsByPriorityAndDueDate(actionItems).map((item) => (
             <li key={item.id}>
-              <ActionItemCard item={item} onDelete={handleDelete} />
+              <ActionItemCard item={item} onDelete={handleDelete} onStatusChange={handleStatusChange} />
             </li>
           ))}
         </ul>

@@ -4,6 +4,7 @@
  * Extensible: add fields or entry types here and the form updates.
  */
 
+import { ACTION_ITEM_STATUSES } from "./actionItems";
 import type {
   EntryType,
   HealthNoteCreate,
@@ -72,11 +73,7 @@ const actionItemFields: FieldConfig[] = [
     label: "Status",
     type: "select",
     required: true,
-    options: [
-      { value: "pending", label: "Pending" },
-      { value: "in_progress", label: "In progress" },
-      { value: "done", label: "Done" },
-    ],
+    options: ACTION_ITEM_STATUSES.map(({ value, label }) => ({ value, label })),
   },
   {
     name: "priority",
