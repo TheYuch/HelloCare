@@ -21,6 +21,15 @@ const STATUS_STYLES: Record<string, string> = {
 
 const DEFAULT_PILL_STYLE = "bg-neutral-100 text-neutral-600 border-neutral-200";
 
+/** Suggested prompts shown when chat is available; clicking sends that message. */
+export const SUGGESTED_PROMPTS = [
+  "What action items do I have?",
+  "What happened in my previous health note?",
+  "Summarize my most recent health notes.",
+  "What are my most important action items?",
+  "What are my upcoming appointments?",
+] as const;
+
 function formatDaysUntil(date: Date): string {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -97,7 +106,16 @@ function ImmutablePill({
   );
 }
 
-export function HomeSummary() {
+const CARD_BUTTON_CLASS =
+  "flex w-full items-center justify-between gap-3 rounded-full border border-neutral-200 px-4 py-3 text-left text-sm text-neutral-900 transition-colors hover:bg-neutral-100";
+
+type HomeSummaryProps = {
+  /** Single prompt to suggest (one at a time from a rotating list); clicking sends that text. */
+  suggestedPrompt?: string;
+  onPromptClick?: (text: string) => void;
+};
+
+export function HomeSummary({ suggestedPrompt, onPromptClick }: HomeSummaryProps) {
   const { data: userMetadata } = useUserMetadata();
   const userData = useUserData();
 
@@ -106,6 +124,7 @@ export function HomeSummary() {
     userData.sessionMetadata,
     userData.actionItems
   );
+  const showPrompt = suggestedPrompt && onPromptClick;
 
   return (
     <div className="flex flex-col items-center px-4 pt-[25vh] pb-4">
@@ -116,13 +135,13 @@ export function HomeSummary() {
       <p className="mt-1 text-sm text-neutral-500 text-center max-w-xs">
         Below is a quick summary of your wellbeing and action items
       </p>
-      {cards.length > 0 ? (
+      {(cards.length > 0 || showPrompt) ? (
         <ul className="mt-8 w-full max-w-md flex flex-col gap-2">
           {cards.map((card, i) => (
             <li key={card.kind === "actionItem" ? card.item.id : i}>
               <Link
                 href={card.href}
-                className="flex items-center justify-between gap-3 rounded-full border border-neutral-200 px-4 py-3 text-left text-sm text-neutral-900 transition-colors hover:bg-neutral-100"
+                className={CARD_BUTTON_CLASS}
               >
                 <span className="min-w-0 flex-1 flex flex-col gap-1.5">
                   <span>{card.label}</span>
@@ -138,6 +157,18 @@ export function HomeSummary() {
               </Link>
             </li>
           ))}
+          {showPrompt && (
+            <li>
+              <button
+                type="button"
+                onClick={() => onPromptClick(suggestedPrompt)}
+                className={CARD_BUTTON_CLASS}
+              >
+                <span className="min-w-0 flex-1">{suggestedPrompt}</span>
+                <HiArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
+              </button>
+            </li>
+          )}
         </ul>
       ) : (
         <p className="max-w-xs mt-4 text-sm text-neutral-500 text-center">
