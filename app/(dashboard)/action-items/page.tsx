@@ -7,7 +7,7 @@ import { Spinner } from "@/app/components/Spinner";
 import { Toast } from "@/app/components/Toast";
 import { useDrawer } from "@/app/(dashboard)/layout";
 import { useAuth } from "@/lib/auth-context";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase"; 
 import {
   ACTION_ITEM_PRIORITIES,
   ACTION_ITEM_STATUSES,
