@@ -2,7 +2,9 @@
 
 import { useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { HiOutlineMenuAlt4 } from "react-icons/hi";
 import { TbArrowBackUp } from "react-icons/tb";
+import { useDrawer } from "@/app/(dashboard)/layout";
 import { useStreamingTranscription } from "@/app/hooks/useStreamingTranscription";
 import { VIEW_CARD_CLASS, VIEW_COMPONENTS } from "./views";
 import { formatConversationDate, parseDateFromSearchParams, getTrailingWords } from "./utils";
@@ -14,6 +16,7 @@ const TRAILING_WORD_COUNT = 15;
 export default function ConversationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { openDrawer } = useDrawer() ?? {};
   const appointmentDate = parseDateFromSearchParams(searchParams);
   const dateLabel = formatConversationDate(appointmentDate);
 
@@ -146,21 +149,31 @@ export default function ConversationPage() {
   }
 
   return (
-    <div className="w-full h-screen flex flex-col gap-5 p-5">
-      <header className="flex flex-col pt-6 gap-4 mb-8">
-        <span className="text-xl font-bold tracking-tight">Conversation</span>
-        <span className="text-neutral-400 leading-5 text-sm">
-          This conversation is about a doctor&apos;s visit on {dateLabel}
-        </span>
+    <div className="w-full h-screen flex flex-col">
+      <header className="flex items-center justify-between px-4 py-3">
+        <button
+          type="button"
+          onClick={() => openDrawer?.()}
+          className="p-2 -ml-2 rounded-lg text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
+          aria-label="Open menu"
+        >
+          <HiOutlineMenuAlt4 className="w-6 h-6" />
+        </button>
+        <h1 className="text-lg font-semibold text-neutral-900">Conversation</h1>
+        <div className="w-10" aria-hidden />
       </header>
-
-      <div
-        className={`w-full h-full flex flex-col rounded-2xl border px-4 transition-colors overflow-hidden ${VIEW_CARD_CLASS[view as keyof typeof VIEW_CARD_CLASS]}`}
-      >
-        {renderView()}
+      <div className="flex-1 min-h-0 flex flex-col gap-5 p-4">
+        <p className="text-sm text-neutral-500">
+          This conversation is about a doctor&apos;s visit on {dateLabel}
+        </p>
+        <div
+          className={`flex-1 min-h-0 flex flex-col rounded-2xl border px-4 transition-colors overflow-hidden ${VIEW_CARD_CLASS[view as keyof typeof VIEW_CARD_CLASS]}`}
+        >
+          {renderView()}
+        </div>
       </div>
 
-      <footer className="pb-15 flex flex-col gap-3">
+      <footer className="pb-15 flex flex-col gap-3 px-4">
         <button
           type="button"
           onClick={() => router.back()}
