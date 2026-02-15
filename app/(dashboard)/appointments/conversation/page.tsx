@@ -1,22 +1,15 @@
 'use client';
 
+import { useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HiMicrophone } from "react-icons/hi";
 import { TbArrowBackUp } from "react-icons/tb";
+import { useStreamingTranscription } from "@/app/hooks/useStreamingTranscription";
+import { VIEW_CARD_CLASS, VIEW_COMPONENTS } from "./views";
+import { formatConversationDate, parseDateFromSearchParams, getTrailingWords } from "./utils";
+import type { ConversationViewId } from "./types";
+import { FULL_PAGE_VIEWS } from "./types";
 
-function formatConversationDate(date: Date): string {
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const year = String(date.getFullYear()).slice(-2);
-  return `${month}/${day}/${year}`;
-}
-
-function parseDateFromSearchParams(searchParams: URLSearchParams): Date {
-  const dateParam = searchParams.get("date");
-  if (!dateParam) return new Date();
-  const parsed = new Date(dateParam);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-}
+const TRAILING_WORD_COUNT = 15;
 
 export default function ConversationPage() {
   const router = useRouter();
@@ -24,27 +17,150 @@ export default function ConversationPage() {
   const appointmentDate = parseDateFromSearchParams(searchParams);
   const dateLabel = formatConversationDate(appointmentDate);
 
+  const [view, setView] = useState<ConversationViewId>("idle");
+  const [summarySegments, setSummarySegments] = useState<string[]>([]);
+
+  const {
+    startRecording,
+    stopRecording,
+    isRecording,
+    isStarting,
+    isStopping,
+    segments,
+    interimTranscript,
+    isSupported,
+    tokenStatus,
+    clearTranscript,
+  } = useStreamingTranscription();
+
+  const trailingWords = useMemo(
+    () => getTrailingWords(segments, interimTranscript, TRAILING_WORD_COUNT),
+    [segments, interimTranscript],
+  );
+
+  const canRecord = isSupported && tokenStatus === "ready";
+
+  // ---- view transition handlers ----
+
+  const handleStartRecording = useCallback(async () => {
+    clearTranscript();
+    await startRecording();
+    setView("recording");
+  }, [startRecording, clearTranscript]);
+
+  const handleStopRecording = useCallback(async () => {
+    let fullTranscript = "";
+    try {
+      fullTranscript = await stopRecording();
+    } finally {
+      setView("summary");
+    }
+    const text = fullTranscript.trim();
+    if (text) {
+      setSummarySegments((prev) => [...prev, text]);
+    }
+  }, [stopRecording]);
+
+  const handleMarkCorrect = useCallback(() => setView("confirmed"), []);
+  const handleMarkIncorrect = useCallback(() => setView("retry"), []);
+
+  const handleRerecord = useCallback(() => {
+    clearTranscript();
+    setSummarySegments([]);
+    setView("idle");
+  }, [clearTranscript]);
+
+  const handleContinueRecording = useCallback(() => {
+    clearTranscript();
+    setView("idle");
+  }, [clearTranscript]);
+
+  const handleDone = useCallback(() => setView("visitSummary"), []);
+
+  const handleGoHome = useCallback(() => {
+    router.push("/");
+  }, [router]);
+
+  // ---- view rendering ----
+
+  function renderView() {
+    switch (view) {
+      case "idle":
+        return (
+          <VIEW_COMPONENTS.idle
+            onStartRecording={handleStartRecording}
+            canRecord={canRecord}
+            isStarting={isStarting}
+          />
+        );
+      case "recording":
+        return (
+          <VIEW_COMPONENTS.recording
+            trailingWords={trailingWords}
+            onStopRecording={handleStopRecording}
+            isStopping={isStopping}
+            canRecord={canRecord}
+          />
+        );
+      case "summary":
+        return (
+          <VIEW_COMPONENTS.summary
+            segments={summarySegments}
+            onMarkCorrect={handleMarkCorrect}
+            onMarkIncorrect={handleMarkIncorrect}
+          />
+        );
+      case "retry":
+        return (
+          <VIEW_COMPONENTS.retry
+            onRerecord={handleRerecord}
+            onMarkCorrect={handleMarkCorrect}
+          />
+        );
+      case "confirmed":
+        return (
+          <VIEW_COMPONENTS.confirmed
+            onContinueRecording={handleContinueRecording}
+            onDone={handleDone}
+            onMarkIncorrect={handleMarkIncorrect}
+          />
+        );
+      case "visitSummary":
+        return (
+          <VIEW_COMPONENTS.visitSummary
+            segments={summarySegments}
+            dateLabel={dateLabel}
+            onGoHome={handleGoHome}
+          />
+        );
+      default: {
+        const _: never = view;
+        return null;
+      }
+    }
+  }
+
+  // Full-page views render without the shared header/card/footer chrome
+  if (FULL_PAGE_VIEWS.has(view)) {
+    return <>{renderView()}</>;
+  }
+
   return (
     <div className="w-full h-screen flex flex-col gap-5 p-5">
-      <div className="flex flex-col pt-6 gap-4 mb-8">
+      <header className="flex flex-col pt-6 gap-4 mb-8">
         <span className="text-xl font-bold tracking-tight">Conversation</span>
         <span className="text-neutral-400 leading-5 text-sm">
           This conversation is about a doctor&apos;s visit on {dateLabel}
         </span>
+      </header>
+
+      <div
+        className={`w-full h-full flex flex-col rounded-2xl border px-4 transition-colors overflow-hidden ${VIEW_CARD_CLASS[view as keyof typeof VIEW_CARD_CLASS]}`}
+      >
+        {renderView()}
       </div>
-      <div className="w-full h-full flex flex-col gap-4 items-center justify-center rounded-2xl bg-white border border-neutral-200">
-        <button
-          type="button"
-          aria-label="Start recording"
-          className="w-20 h-20 rounded-full border-2 border-neutral-900 bg-white flex items-center justify-center active:opacity-80 transition-opacity"
-        >
-          <HiMicrophone className="w-8 h-8 text-neutral-900" aria-hidden />
-        </button>
-        <span className="text-center text-base text-neutral-900">
-          Press the button above to start recording
-        </span>
-      </div>
-      <div className="pb-15 flex flex-col gap-3">
+
+      <footer className="pb-15 flex flex-col gap-3">
         <button
           type="button"
           onClick={() => router.back()}
@@ -54,7 +170,7 @@ export default function ConversationPage() {
           <span className="flex-1 text-center">I don&apos;t want to record, go back</span>
           <span className="w-4 shrink-0" aria-hidden />
         </button>
-      </div>
+      </footer>
     </div>
   );
 }
