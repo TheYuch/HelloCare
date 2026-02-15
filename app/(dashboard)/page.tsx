@@ -12,6 +12,7 @@ import { useUserMetadata } from "@/lib/firestore";
 const DRAWER_MENU_ITEMS = [
   { label: "Action Items", href: "/action-items" },
   { label: "Health Notes", href: "/health-notes" },
+  { label: "Conversation", href: "/appointments/conversation" },
 ] as const;
 
 export default function Home() {
@@ -47,6 +48,7 @@ export default function Home() {
         </button>
         <button
           type="button"
+          onClick={() => router.push("/appointments/conversation")}
           className="flex items-center gap-2 rounded-full bg-neutral-200 px-4 py-2.5 text-sm text-neutral-900 transition-colors hover:bg-neutral-300"
         >
           <HiOutlineChatBubbleLeftRight className="h-5 w-5 shrink-0" />
