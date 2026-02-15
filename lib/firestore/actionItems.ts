@@ -2,6 +2,21 @@
  * Helpers for action items (sorting, etc.).
  */
 
+/** Canonical type definitions for action items. Single source of truth. */
+export const ACTION_ITEM_TYPES = [
+  { value: "Medication", label: "Medication" },
+  { value: "Exercise", label: "Exercise" },
+  { value: "Appointment", label: "Appointment" },
+  { value: "Other", label: "Other" },
+] as const;
+
+/** Canonical priority definitions for action items. Single source of truth. */
+export const ACTION_ITEM_PRIORITIES = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
+
 /** Canonical status definitions for action items. Single source of truth. */
 export const ACTION_ITEM_STATUSES = [
   { value: "pending", label: "Pending" },

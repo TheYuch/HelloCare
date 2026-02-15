@@ -2,12 +2,13 @@
 
 import { useCallback, useState } from "react";
 import { HiOutlineMenuAlt4, HiOutlineTrash } from "react-icons/hi";
+import { PillDropdown } from "@/app/components/PillDropdown";
 import { Spinner } from "@/app/components/Spinner";
 import { Toast } from "@/app/components/Toast";
 import { useDrawer } from "@/app/(dashboard)/layout";
 import { useAuth } from "@/lib/auth-context";
 import { db } from "@/lib/firebase";
-import { deleteHealthNote, useHealthNotes } from "@/lib/firestore";
+import { deleteHealthNote, HEALTH_NOTE_TYPES, useHealthNotes, writeHealthNote } from "@/lib/firestore";
 import type { HealthNote } from "@/lib/firestore";
 
 function formatDate(date: Date): string {
@@ -23,9 +24,11 @@ function formatTime(date: Date): string {
 function HealthNoteCard({
   note,
   onDelete,
+  onFieldChange,
 }: {
   note: HealthNote;
   onDelete: (id: string) => void;
+  onFieldChange: (id: string, field: string, value: string) => void;
 }) {
   return (
     <article
@@ -45,11 +48,12 @@ function HealthNoteCard({
           <h3 className="text-base font-semibold text-neutral-900">
             {note.title || "Untitled"}
           </h3>
-          {note.type && (
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
-              {note.type}
-            </span>
-          )}
+          <PillDropdown
+            value={note.type}
+            options={HEALTH_NOTE_TYPES}
+            onChange={(v) => onFieldChange(note.id, "type", v)}
+            ariaLabel="Change type"
+          />
         </div>
         {note.description ? (
           <p className="text-sm text-neutral-600">{note.description}</p>
@@ -90,25 +94,38 @@ export default function HealthNotesPage() {
   const { healthNotes, loading, error } = useHealthNotes();
   const { openDrawer } = useDrawer() ?? {};
   const { user } = useAuth();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showDeletedToast, setShowDeletedToast] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleDelete = async (noteId: string) => {
     if (!user?.uid) return;
-    setDeleteError(null);
+    setOperationError(null);
     const result = await deleteHealthNote(db, user.uid, noteId);
     if (result.ok) {
-      setShowDeletedToast(true);
+      setToastMessage("Deleted");
     } else {
-      setDeleteError(result.error.message);
+      setOperationError(result.error.message);
     }
   };
 
-  const dismissToast = useCallback(() => setShowDeletedToast(false), []);
+  const handleFieldChange = async (noteId: string, field: string, value: string) => {
+    if (!user?.uid) return;
+    setOperationError(null);
+    const note = healthNotes.find((n) => n.id === noteId);
+    if (!note) return;
+    const result = await writeHealthNote(db, user.uid, { ...note, [field]: value });
+    if (result.ok) {
+      setToastMessage("Updated");
+    } else {
+      setOperationError(result.error.message);
+    }
+  };
+
+  const dismissToast = useCallback(() => setToastMessage(null), []);
 
   return (
     <div className="w-full min-h-screen flex flex-col">
-      <Toast message="Deleted" visible={showDeletedToast} onDismiss={dismissToast} />
+      <Toast message={toastMessage ?? ""} visible={toastMessage != null} onDismiss={dismissToast} />
       <header className="flex items-center justify-between px-4 py-3">
         <button
           type="button"
@@ -126,9 +143,9 @@ export default function HealthNotesPage() {
         Your health notes from visits, updated in real time.
       </p>
 
-      {deleteError && (
+      {operationError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-center">
-          <p className="text-sm text-rose-800">{deleteError}</p>
+          <p className="text-sm text-rose-800">{operationError}</p>
         </div>
       )}
 
@@ -147,7 +164,7 @@ export default function HealthNotesPage() {
         <ul className="flex flex-col gap-3 list-none p-0 m-0">
           {healthNotes.map((note) => (
             <li key={note.id}>
-              <HealthNoteCard note={note} onDelete={handleDelete} />
+              <HealthNoteCard note={note} onDelete={handleDelete} onFieldChange={handleFieldChange} />
             </li>
           ))}
         </ul>

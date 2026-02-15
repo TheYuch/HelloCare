@@ -4,7 +4,8 @@
  * Extensible: add fields or entry types here and the form updates.
  */
 
-import { ACTION_ITEM_STATUSES } from "./actionItems";
+import { ACTION_ITEM_PRIORITIES, ACTION_ITEM_STATUSES, ACTION_ITEM_TYPES } from "./actionItems";
+import { HEALTH_NOTE_TYPES } from "./healthNotes";
 import type {
   EntryType,
   HealthNoteCreate,
@@ -40,9 +41,7 @@ const healthNoteFields: FieldConfig[] = [
     required: true,
     options: [
       { value: "", label: "Select type…" },
-      { value: "Injury", label: "Injury" },
-      { value: "Recurring pain", label: "Recurring pain" },
-      { value: "Temporary pain", label: "Temporary pain" },
+      ...HEALTH_NOTE_TYPES.map(({ value, label }) => ({ value, label })),
     ],
   },
   { name: "description", label: "Description", type: "textarea", placeholder: "Notes…" },
@@ -60,10 +59,7 @@ const actionItemFields: FieldConfig[] = [
     required: true,
     options: [
       { value: "", label: "Select type…" },
-      { value: "Medication", label: "Medication" },
-      { value: "Exercise", label: "Exercise" },
-      { value: "Appointment", label: "Appointment" },
-      { value: "Other", label: "Other" },
+      ...ACTION_ITEM_TYPES.map(({ value, label }) => ({ value, label })),
     ],
   },
   { name: "description", label: "Description", type: "textarea", placeholder: "Details…" },
@@ -79,11 +75,7 @@ const actionItemFields: FieldConfig[] = [
     name: "priority",
     label: "Priority",
     type: "select",
-    options: [
-      { value: "low", label: "Low" },
-      { value: "medium", label: "Medium" },
-      { value: "high", label: "High" },
-    ],
+    options: ACTION_ITEM_PRIORITIES.map(({ value, label }) => ({ value, label })),
   },
   {
     name: "recurrence",

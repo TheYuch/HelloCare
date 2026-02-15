@@ -7,5 +7,6 @@ export { Drawer } from "./Drawer";
 export { ChatWidget } from "./ChatWidget";
 export { HomeSummary } from "./HomeSummary";
 export { MarkdownContent } from "./MarkdownContent";
+export { PillDropdown } from "./PillDropdown";
 export { StreamingText } from "./StreamingText";
 export { Toast } from "./Toast";

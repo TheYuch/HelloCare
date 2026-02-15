@@ -4,6 +4,13 @@
 
 import type { HealthNote } from "./types";
 
+/** Canonical type definitions for health notes. Single source of truth. */
+export const HEALTH_NOTE_TYPES = [
+  { value: "Injury", label: "Injury" },
+  { value: "Recurring pain", label: "Recurring pain" },
+  { value: "Temporary pain", label: "Temporary pain" },
+] as const;
+
 /**
  * Sort health notes by most recent first: by date (visit date) descending,
  * then by startedAt descending. This approximates "most recently created" when
