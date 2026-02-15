@@ -79,7 +79,7 @@ export async function writeUserMetadata(
     const ref = getUserDocRef(db, uid);
     const docData: UserMetadata = {
       id: uid,
-      email: payload.email,
+      email: payload.email ?? "",
       firstName: payload.firstName ?? "",
       lastName: payload.lastName ?? "",
       preferredLanguage: payload.preferredLanguage ?? "en",

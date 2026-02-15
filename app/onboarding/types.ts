@@ -12,3 +12,8 @@ export interface BaseStepProps {
   formData: OnboardingFormData;
   setFormData: React.Dispatch<React.SetStateAction<OnboardingFormData>>;
 }
+
+export interface Step4Props extends BaseStepProps {
+  saving?: boolean;
+  saveError?: string | null;
+}
