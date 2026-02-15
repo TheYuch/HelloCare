@@ -252,3 +252,44 @@ export function useUserData() {
 
   return state;
 }
+
+type ActionItemsState = {
+  actionItems: ActionItem[];
+  loading: boolean;
+  error: Error | null;
+};
+
+/**
+ * Real-time subscription to the authenticated user's action items only.
+ * Returns an unsubscribe on cleanup.
+ */
+export function useActionItems(): ActionItemsState {
+  const { user, loading: authLoading } = useAuth();
+  const uid = user?.uid ?? null;
+
+  const [state, setState] = useState<ActionItemsState>({
+    actionItems: [],
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (authLoading || !uid) {
+      setState((s) => ({ ...s, loading: !!authLoading }));
+      return;
+    }
+
+    setState((s) => ({ ...s, loading: true, error: null }));
+
+    const unsubscribe = subscribeActionItems(
+      db,
+      uid,
+      (data) => setState({ actionItems: data, loading: false, error: null }),
+      (err) => setState((s) => ({ ...s, error: err, loading: false }))
+    );
+
+    return unsubscribe;
+  }, [authLoading, uid]);
+
+  return state;
+}

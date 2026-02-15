@@ -8,6 +8,11 @@ import { ChatWidget, Drawer } from "@/app/components";
 import { useAuth } from "@/lib/auth-context";
 import { useUserMetadata } from "@/lib/firestore";
 
+/** Drawer menu items: add entries here to extend the menu. */
+const DRAWER_MENU_ITEMS = [
+  { label: "Action Items", href: "/action-items" },
+] as const;
+
 export default function Home() {
   const { user } = useAuth();
   const { data: userMetadata, loading, isOnboarded } = useUserMetadata();
@@ -57,7 +62,21 @@ export default function Home() {
         userName={userName}
         userAvatarUrl={user?.photoURL ?? undefined}
       >
-        <p className="text-neutral-600">Menu content</p>
+        <nav className="flex flex-col gap-0.5" aria-label="Menu">
+          {DRAWER_MENU_ITEMS.map(({ label, href }) => (
+            <button
+              key={href}
+              type="button"
+              onClick={() => {
+                router.push(href);
+                setDrawerOpen(false);
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </Drawer>
       <ChatWidget />
     </div>
